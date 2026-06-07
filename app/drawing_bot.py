@@ -31,9 +31,19 @@ class DrawingBot:
         progress_callback: ProgressCallback | None = None,
     ) -> None:
         self._stop_event = threading.Event()
+        self._delay_lock = threading.Lock()
+        self._delay_ms = 25
         self._status_callback = status_callback or (lambda message: None)
         self._progress_callback = progress_callback or (lambda done, total: None)
         self._scaling_factor = _windows_scaling_factor()
+
+    def set_delay_ms(self, delay_ms: int) -> None:
+        with self._delay_lock:
+            self._delay_ms = max(0, min(250, int(delay_ms)))
+
+    @property
+    def is_stopped(self) -> bool:
+        return self._stop_event.is_set()
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -78,7 +88,7 @@ class DrawingBot:
                 mouse.move(request.top_left[0] + x_step * x, request.top_left[1] + y_step * y, duration=0)
                 mouse.click()
                 self._progress_callback(done, total)
-                time.sleep(0.001)
+                self._sleep()
 
     def _draw_lines(self, request: DrawRequest) -> None:
         width, height, x_step, y_step = _drawing_geometry(request)
@@ -120,10 +130,13 @@ class DrawingBot:
         start = (request.top_left[0] + x_step * x, request.top_left[1] + y_step * start_y)
         end = (request.top_left[0] + x_step * x, request.top_left[1] + y_step * end_y)
         mouse.move(start[0], start[1], duration=0)
+        self._sleep()
         mouse.hold()
+        self._sleep()
         mouse.move(end[0], end[1], duration=0)
-        time.sleep(0.001)
+        self._sleep()
         mouse.release()
+        self._sleep()
 
     def _select_color(self, color: PaletteColor) -> None:
         if color.position is None:
@@ -134,6 +147,16 @@ class DrawingBot:
             duration=0,
         )
         mouse.click()
+        self._sleep(multiplier=2)
+
+    def _sleep(self, multiplier: float = 1.0) -> None:
+        delay = self._current_delay_seconds() * multiplier
+        if delay > 0:
+            time.sleep(delay)
+
+    def _current_delay_seconds(self) -> float:
+        with self._delay_lock:
+            return self._delay_ms / 1000
 
 
 def _validate_request(request: DrawRequest) -> None:

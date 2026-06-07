@@ -4,12 +4,16 @@ A small Windows desktop app that draws local or remote images into Gartic Phone 
 
 The app is a rewrite of the original two-script bot into one clean CustomTkinter interface with preview, palette calibration, drawing-area setup, Start/Stop controls, and a reproducible Windows `.exe` build.
 
+Original code by CowCoding0. Fork and improvements by DJ_Nic.
+
 ## Features
 
 - One integrated desktop app for image loading, palette calibration, drawing-area setup, and drawing.
 - Local image and URL support.
 - Gartic palette preview before drawing.
 - Dot and line drawing modes.
+- Live delay slider to slow down clicks and drags while drawing.
+- Optional start countdown so you can release the mouse before drawing begins.
 - Persistent settings in `%APPDATA%/GarticPhoneDrawBot/config.json`.
 - `Esc` and the Stop button abort drawing.
 - GitHub Actions workflow for a portable Windows executable.
@@ -33,8 +37,10 @@ Run the `.exe` on Windows. The app does not need an installer.
 5. Click `Set Drawing Area`.
 6. Click the top-left and bottom-right corners of the drawing area.
 7. Pick detail level and drawing mode.
-8. Click `Start Drawing`.
-9. Press `Esc` or click `Stop` if you need to abort.
+8. Keep `Countdown` enabled if you want a short 3-second safety pause before drawing.
+9. Raise `Delay` if Gartic misses color changes or line mode drags toward the palette.
+10. Click `Start Drawing`.
+11. Press `Esc` or click `Stop` if you need to abort.
 
 The palette and drawing-area settings are saved automatically, so you usually only need to recalibrate when the browser window, zoom, monitor, or Gartic layout changes.
 

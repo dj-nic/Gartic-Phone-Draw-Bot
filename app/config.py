@@ -25,6 +25,8 @@ class AppConfig:
     palette_positions: dict[str, dict[str, int]] = field(default_factory=dict)
     drawing_boundary: DrawingBoundary = field(default_factory=DrawingBoundary)
     detail_level: int = 9
+    draw_delay_ms: int = 25
+    start_countdown_seconds: int = 3
     draw_mode: str = "line"
     image_source_mode: str = "file"
 
@@ -50,6 +52,8 @@ class ConfigStore:
                 bottom_right=_tuple_or_none(boundary.get("bottom_right")),
             ),
             detail_level=_clamp_int(payload.get("detail_level"), 1, 10, 9),
+            draw_delay_ms=_clamp_int(payload.get("draw_delay_ms"), 0, 250, 25),
+            start_countdown_seconds=_clamp_int(payload.get("start_countdown_seconds"), 0, 10, 3),
             draw_mode=payload.get("draw_mode") if payload.get("draw_mode") in {"dot", "line"} else "line",
             image_source_mode=(
                 payload.get("image_source_mode")

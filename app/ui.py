@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from pathlib import Path
 from tkinter import filedialog
 
@@ -31,11 +32,13 @@ class GarticDrawBotApp(ctk.CTk):
         self.palette = palette_from_config(self.config_model.palette_positions)
         self.processor = ImageProcessor(self.palette)
         self.bot = DrawingBot(self._post_status, self._post_progress)
+        self.bot.set_delay_ms(self.config_model.draw_delay_ms)
         self.messages: queue.Queue[tuple[str, object]] = queue.Queue()
         self.loaded_image: Image.Image | None = None
         self.quantized_image: QuantizedImage | None = None
         self.selected_file: Path | None = None
         self.draw_thread: threading.Thread | None = None
+        self.countdown_thread: threading.Thread | None = None
         self.preview_photo: ctk.CTkImage | None = None
 
         self._build_ui()
@@ -80,33 +83,50 @@ class GarticDrawBotApp(ctk.CTk):
         self.detail_label.grid(row=5, column=0, sticky="w", padx=16, pady=(18, 2))
         self.detail_slider.grid(row=6, column=0, sticky="ew", padx=16, pady=4)
 
+        self.delay_slider = ctk.CTkSlider(left, from_=0, to=250, number_of_steps=50, command=self._on_delay_change)
+        self.delay_label = ctk.CTkLabel(left, text="Delay: 25 ms")
+        self.delay_label.grid(row=7, column=0, sticky="w", padx=16, pady=(14, 2))
+        self.delay_slider.grid(row=8, column=0, sticky="ew", padx=16, pady=4)
+
         self.draw_mode = ctk.StringVar(value="line")
         ctk.CTkSegmentedButton(left, values=["line", "dot"], variable=self.draw_mode).grid(
-            row=7, column=0, sticky="ew", padx=16, pady=12
+            row=9, column=0, sticky="ew", padx=16, pady=12
+        )
+
+        self.countdown_enabled = ctk.BooleanVar(value=True)
+        ctk.CTkSwitch(left, text="Countdown", variable=self.countdown_enabled, command=self._on_countdown_change).grid(
+            row=10, column=0, sticky="w", padx=16, pady=(0, 8)
         )
 
         ctk.CTkButton(left, text="Calibrate Palette", command=self.calibrate_palette).grid(
-            row=8, column=0, sticky="ew", padx=16, pady=6
+            row=11, column=0, sticky="ew", padx=16, pady=6
         )
         ctk.CTkButton(left, text="Test Palette", command=self.test_palette).grid(
-            row=9, column=0, sticky="ew", padx=16, pady=6
+            row=12, column=0, sticky="ew", padx=16, pady=6
         )
         ctk.CTkButton(left, text="Set Drawing Area", command=self.set_drawing_area).grid(
-            row=10, column=0, sticky="ew", padx=16, pady=6
+            row=13, column=0, sticky="ew", padx=16, pady=6
         )
 
         ctk.CTkButton(left, text="Start Drawing", fg_color="#2e7d32", command=self.start_drawing).grid(
-            row=11, column=0, sticky="ew", padx=16, pady=(18, 6)
+            row=14, column=0, sticky="ew", padx=16, pady=(18, 6)
         )
         ctk.CTkButton(left, text="Stop", fg_color="#b3261e", command=self.stop_drawing).grid(
-            row=12, column=0, sticky="ew", padx=16, pady=6
+            row=15, column=0, sticky="ew", padx=16, pady=6
         )
 
         self.status_label = ctk.CTkLabel(left, text="Ready", anchor="w", wraplength=290)
-        self.status_label.grid(row=13, column=0, sticky="ew", padx=16, pady=(18, 6))
+        self.status_label.grid(row=16, column=0, sticky="ew", padx=16, pady=(18, 6))
         self.progress = ctk.CTkProgressBar(left)
-        self.progress.grid(row=14, column=0, sticky="ew", padx=16, pady=(0, 16))
+        self.progress.grid(row=17, column=0, sticky="ew", padx=16, pady=(0, 10))
         self.progress.set(0)
+        ctk.CTkLabel(
+            left,
+            text="Original by CowCoding0 · Fork improved by DJ_Nic",
+            text_color="#8f98a8",
+            font=ctk.CTkFont(size=11),
+            wraplength=290,
+        ).grid(row=18, column=0, sticky="w", padx=16, pady=(0, 16))
 
         ctk.CTkLabel(right, text="Preview", font=ctk.CTkFont(size=18, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=16, pady=(16, 8)
@@ -122,7 +142,10 @@ class GarticDrawBotApp(ctk.CTk):
         self.source_mode.set(self.config_model.image_source_mode)
         self.draw_mode.set(self.config_model.draw_mode)
         self.detail_slider.set(self.config_model.detail_level)
+        self.delay_slider.set(self.config_model.draw_delay_ms)
+        self.countdown_enabled.set(self.config_model.start_countdown_seconds > 0)
         self._on_detail_change(self.config_model.detail_level)
+        self._on_delay_change(self.config_model.draw_delay_ms)
         self._sync_source_controls()
 
     def choose_file(self) -> None:
@@ -161,6 +184,9 @@ class GarticDrawBotApp(ctk.CTk):
         if self.draw_thread and self.draw_thread.is_alive():
             self._set_status("Drawing is already running.")
             return
+        if self.countdown_thread and self.countdown_thread.is_alive():
+            self._set_status("Countdown is already running.")
+            return
         if self.quantized_image is None:
             self._set_status("Load an image first.")
             return
@@ -176,6 +202,18 @@ class GarticDrawBotApp(ctk.CTk):
             mode=self.draw_mode.get(),
         )
         self._save_preferences()
+        self.bot.set_delay_ms(self.config_model.draw_delay_ms)
+        self.bot.reset()
+        countdown_seconds = self.config_model.start_countdown_seconds
+        if countdown_seconds > 0:
+            self.countdown_thread = threading.Thread(
+                target=self._run_countdown_then_draw,
+                args=(request, countdown_seconds),
+                daemon=True,
+            )
+            self.countdown_thread.start()
+            return
+
         self.draw_thread = threading.Thread(target=self._run_draw, args=(request,), daemon=True)
         self.draw_thread.start()
 
@@ -263,10 +301,36 @@ class GarticDrawBotApp(ctk.CTk):
         except Exception as exc:
             self._post_status(f"Drawing failed: {exc}")
 
+    def _run_countdown_then_draw(self, request: DrawRequest, seconds: int) -> None:
+        for remaining in range(seconds, 0, -1):
+            if self.bot.is_stopped:
+                self._post_status("Drawing cancelled.")
+                return
+            self._post_status(f"Drawing starts in {remaining}...")
+            time.sleep(1)
+
+        if self.bot.is_stopped:
+            self._post_status("Drawing cancelled.")
+            return
+
+        self.draw_thread = threading.Thread(target=self._run_draw, args=(request,), daemon=True)
+        self.draw_thread.start()
+
     def _on_detail_change(self, value: float | int) -> None:
         self.detail_label.configure(text=f"Detail: {int(float(value))}")
         if self.loaded_image is not None:
             self._refresh_preview()
+
+    def _on_delay_change(self, value: float | int) -> None:
+        delay_ms = int(float(value))
+        self.delay_label.configure(text=f"Delay: {delay_ms} ms")
+        self.bot.set_delay_ms(delay_ms)
+        self.config_model.draw_delay_ms = delay_ms
+        self.store.save(self.config_model)
+
+    def _on_countdown_change(self) -> None:
+        self.config_model.start_countdown_seconds = 3 if self.countdown_enabled.get() else 0
+        self.store.save(self.config_model)
 
     def _sync_source_controls(self) -> None:
         if self.source_mode.get() == "url":
@@ -278,6 +342,8 @@ class GarticDrawBotApp(ctk.CTk):
 
     def _save_preferences(self) -> None:
         self.config_model.detail_level = int(self.detail_slider.get())
+        self.config_model.draw_delay_ms = int(self.delay_slider.get())
+        self.config_model.start_countdown_seconds = 3 if self.countdown_enabled.get() else 0
         self.config_model.draw_mode = self.draw_mode.get()
         self.config_model.image_source_mode = self.source_mode.get()
         self.store.save(self.config_model)
