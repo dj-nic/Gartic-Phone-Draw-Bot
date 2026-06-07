@@ -1,8 +1,8 @@
-class PixelData:
-    def __init__(self, x, y, color):
-        self.x = x
-        self.y = y
-        self.color = color
+from dataclasses import dataclass
 
-    def print(self):
-        print(self.x, self.y, self.color)
+
+@dataclass
+class PixelData:
+    x: int
+    y: int
+    color: object
