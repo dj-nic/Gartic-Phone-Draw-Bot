@@ -13,6 +13,7 @@ Original code by CowCoding0. Fork and improvements by DJ_Nic.
 - Gartic palette preview before drawing.
 - Dot and line drawing modes.
 - Live delay slider to slow down clicks and drags while drawing.
+- ETA display next to the progress bar while drawing.
 - Optional start countdown so you can release the mouse before drawing begins.
 - Persistent settings in `%APPDATA%/GarticPhoneDrawBot/config.json`.
 - `Esc` and the Stop button abort drawing.
@@ -40,7 +41,8 @@ Run the `.exe` on Windows. The app does not need an installer.
 8. Keep `Countdown` enabled if you want a short 3-second safety pause before drawing.
 9. Raise `Delay` if Gartic misses color changes or line mode drags toward the palette.
 10. Click `Start Drawing`.
-11. Press `Esc` or click `Stop` if you need to abort.
+11. Watch the progress bar and ETA while the bot draws.
+12. Press `Esc` or click `Stop` if you need to abort.
 
 The palette and drawing-area settings are saved automatically, so you usually only need to recalibrate when the browser window, zoom, monitor, or Gartic layout changes.
 

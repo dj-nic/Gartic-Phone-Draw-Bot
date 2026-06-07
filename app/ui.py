@@ -40,6 +40,7 @@ class GarticDrawBotApp(ctk.CTk):
         self.draw_thread: threading.Thread | None = None
         self.countdown_thread: threading.Thread | None = None
         self.preview_photo: ctk.CTkImage | None = None
+        self.draw_started_at: float | None = None
 
         self._build_ui()
         self._load_config_to_ui()
@@ -118,15 +119,17 @@ class GarticDrawBotApp(ctk.CTk):
         self.status_label = ctk.CTkLabel(left, text="Ready", anchor="w", wraplength=290)
         self.status_label.grid(row=16, column=0, sticky="ew", padx=16, pady=(18, 6))
         self.progress = ctk.CTkProgressBar(left)
-        self.progress.grid(row=17, column=0, sticky="ew", padx=16, pady=(0, 10))
+        self.progress.grid(row=17, column=0, sticky="ew", padx=16, pady=(0, 4))
         self.progress.set(0)
+        self.eta_label = ctk.CTkLabel(left, text="ETA: --", anchor="w", text_color="#aab2c0")
+        self.eta_label.grid(row=18, column=0, sticky="ew", padx=16, pady=(0, 10))
         ctk.CTkLabel(
             left,
-            text="Original by CowCoding0 · Fork improved by DJ_Nic",
+            text="Original by CowCoding0 - Fork improved by DJ_Nic",
             text_color="#8f98a8",
             font=ctk.CTkFont(size=11),
             wraplength=290,
-        ).grid(row=18, column=0, sticky="w", padx=16, pady=(0, 16))
+        ).grid(row=19, column=0, sticky="w", padx=16, pady=(0, 16))
 
         ctk.CTkLabel(right, text="Preview", font=ctk.CTkFont(size=18, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=16, pady=(16, 8)
@@ -204,6 +207,9 @@ class GarticDrawBotApp(ctk.CTk):
         self._save_preferences()
         self.bot.set_delay_ms(self.config_model.draw_delay_ms)
         self.bot.reset()
+        self.draw_started_at = None
+        self.progress.set(0)
+        self.eta_label.configure(text="ETA: waiting")
         countdown_seconds = self.config_model.start_countdown_seconds
         if countdown_seconds > 0:
             self.countdown_thread = threading.Thread(
@@ -296,6 +302,7 @@ class GarticDrawBotApp(ctk.CTk):
 
     def _run_draw(self, request: DrawRequest) -> None:
         try:
+            self.draw_started_at = time.monotonic()
             self._post_status("Drawing started. Press Esc to stop.")
             self.bot.draw(request)
         except Exception as exc:
@@ -366,14 +373,39 @@ class GarticDrawBotApp(ctk.CTk):
 
             if kind == "status":
                 self._set_status(str(payload))
+                if payload in {"Drawing complete.", "Drawing stopped.", "Drawing cancelled."}:
+                    self.eta_label.configure(text="ETA: --")
+                    self.draw_started_at = None
             elif kind == "progress":
                 done, total = payload
                 self.progress.set(done / total if total else 0)
+                self.eta_label.configure(text=self._eta_text(done, total))
             elif kind == "refresh_preview":
                 self._refresh_preview()
         self.after(100, self._drain_messages)
+
+    def _eta_text(self, done: int, total: int) -> str:
+        if done <= 0 or total <= 0 or self.draw_started_at is None:
+            return "ETA: calculating..."
+        if done >= total:
+            return "ETA: 0s"
+
+        elapsed = max(0.001, time.monotonic() - self.draw_started_at)
+        remaining = int((elapsed / done) * (total - done))
+        return f"ETA: {_format_duration(remaining)}"
 
 
 def main() -> None:
     app = GarticDrawBotApp()
     app.mainloop()
+
+
+def _format_duration(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    minutes, remaining_seconds = divmod(seconds, 60)
+    hours, remaining_minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {remaining_minutes}m"
+    if remaining_minutes:
+        return f"{remaining_minutes}m {remaining_seconds:02d}s"
+    return f"{remaining_seconds}s"

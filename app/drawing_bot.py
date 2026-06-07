@@ -79,6 +79,7 @@ class DrawingBot:
                 color = request.pixel_colors[x][y]
                 done += 1
                 if color is None:
+                    self._report_progress(done, total)
                     continue
 
                 if color.name != last_color_name:
@@ -105,6 +106,7 @@ class DrawingBot:
                 if color is None:
                     y += 1
                     done += 1
+                    self._report_progress(done, total)
                     continue
 
                 start_y = y
@@ -157,6 +159,10 @@ class DrawingBot:
     def _current_delay_seconds(self) -> float:
         with self._delay_lock:
             return self._delay_ms / 1000
+
+    def _report_progress(self, done: int, total: int) -> None:
+        if done >= total or done % 50 == 0:
+            self._progress_callback(done, total)
 
 
 def _validate_request(request: DrawRequest) -> None:
