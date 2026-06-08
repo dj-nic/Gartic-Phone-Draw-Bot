@@ -24,6 +24,7 @@ class DrawingBoundary:
 class GameConfig:
     palette_positions: dict[str, dict[str, int]] = field(default_factory=dict)
     drawing_boundary: DrawingBoundary = field(default_factory=DrawingBoundary)
+    tool_positions: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass
@@ -35,7 +36,7 @@ class AppConfig:
     detail_level: int = 9
     draw_delay_ms: int = 5
     start_countdown_seconds: int = 3
-    draw_mode: str = "line"
+    draw_mode: str = "hybrid"
     image_source_mode: str = "file"
 
 
@@ -68,7 +69,7 @@ class ConfigStore:
             detail_level=_clamp_int(payload.get("detail_level"), 1, 10, 9),
             draw_delay_ms=_clamp_int(payload.get("draw_delay_ms"), 0, 100, 5),
             start_countdown_seconds=_clamp_int(payload.get("start_countdown_seconds"), 0, 10, 3),
-            draw_mode=payload.get("draw_mode") if payload.get("draw_mode") in {"dot", "line"} else "line",
+            draw_mode=payload.get("draw_mode") if payload.get("draw_mode") in {"dot", "line", "hybrid"} else "hybrid",
             image_source_mode=(
                 payload.get("image_source_mode")
                 if payload.get("image_source_mode") in {"file", "url"}
@@ -125,6 +126,7 @@ def _load_game_configs(value: Any, legacy_gartic: GameConfig) -> dict[str, GameC
         boundary = payload.get("drawing_boundary") or {}
         game_configs[game_mode] = GameConfig(
             palette_positions=dict(payload.get("palette_positions") or {}),
+            tool_positions=dict(payload.get("tool_positions") or {}),
             drawing_boundary=DrawingBoundary(
                 top_left=_tuple_or_none(boundary.get("top_left")),
                 bottom_right=_tuple_or_none(boundary.get("bottom_right")),

@@ -10,6 +10,7 @@ import keyboard
 import mouse
 
 from app.palette import PaletteColor
+from app.planner import DrawingPlan, FillRegion, StrokeSegment, build_hybrid_plan
 
 
 StatusCallback = Callable[[str], None]
@@ -24,6 +25,7 @@ class DrawRequest:
     bottom_right: tuple[int, int]
     mode: str
     game_mode: str = "gartic"
+    tool_positions: dict[str, tuple[int, int]] | None = None
 
 
 class DrawingBot:
@@ -60,7 +62,9 @@ class DrawingBot:
         if request.game_mode == "skribbl":
             keyboard.press_and_release("b")
             self._sleep(multiplier=2)
-        if request.mode == "dot":
+        if request.mode == "hybrid" and request.game_mode == "gartic":
+            self._draw_hybrid(request)
+        elif request.mode == "dot":
             self._draw_dots(request)
         else:
             self._draw_lines(request)
@@ -138,6 +142,77 @@ class DrawingBot:
         end = (request.top_left[0] + x_step * x, request.top_left[1] + y_step * end_y)
         mouse.move(start[0], start[1], duration=0)
         self._sleep()
+
+    def _draw_hybrid(self, request: DrawRequest) -> None:
+        tool_positions = request.tool_positions or {}
+        fill_enabled = "brush" in tool_positions and "fill" in tool_positions
+        if not fill_enabled:
+            self._status_callback("Hybrid: Fill is not calibrated, using brush-only strokes.")
+        plan = build_hybrid_plan(request.pixel_colors, fill_enabled=fill_enabled)
+        total = max(1, plan.operation_count)
+        done = 0
+
+        brush_position = tool_positions.get("brush")
+        if brush_position is not None:
+            self._select_tool(brush_position)
+
+        for stroke in plan.strokes:
+            if self._stop_event.is_set():
+                return
+            self._draw_planned_stroke(request, stroke)
+            done += 1
+            self._progress_callback(done, total)
+
+        for region in plan.fills:
+            if self._stop_event.is_set():
+                return
+            done = self._draw_fill_region(request, region, tool_positions, done, total)
+
+    def _draw_fill_region(
+        self,
+        request: DrawRequest,
+        region: FillRegion,
+        tool_positions: dict[str, tuple[int, int]],
+        done: int,
+        total: int,
+    ) -> int:
+        brush_position = tool_positions.get("brush")
+        if brush_position is not None:
+            self._select_tool(brush_position)
+
+        for stroke in region.outline:
+            if self._stop_event.is_set():
+                return done
+            self._draw_planned_stroke(request, stroke)
+            done += 1
+            self._progress_callback(done, total)
+
+        fill_position = tool_positions.get("fill")
+        if fill_position is None:
+            return done
+        self._select_tool(fill_position)
+        self._select_color(region.color)
+        x, y = _grid_to_screen(request, region.fill_at)
+        mouse.move(x, y, duration=0)
+        self._sleep()
+        mouse.click()
+        self._sleep(multiplier=2)
+        done += 1
+        self._progress_callback(done, total)
+        return done
+
+    def _draw_planned_stroke(self, request: DrawRequest, stroke: StrokeSegment) -> None:
+        self._select_color(stroke.color)
+        start = _grid_to_screen(request, stroke.start)
+        end = _grid_to_screen(request, stroke.end)
+        mouse.move(start[0], start[1], duration=0)
+        self._sleep()
+        mouse.hold()
+        self._sleep()
+        mouse.move(end[0], end[1], duration=0)
+        self._sleep()
+        mouse.release()
+        self._sleep()
         mouse.hold()
         self._sleep()
         mouse.move(end[0], end[1], duration=0)
@@ -153,6 +228,11 @@ class DrawingBot:
             color.position.y / self._scaling_factor,
             duration=0,
         )
+        mouse.click()
+        self._sleep(multiplier=2)
+
+    def _select_tool(self, position: tuple[int, int]) -> None:
+        mouse.move(position[0] / self._scaling_factor, position[1] / self._scaling_factor, duration=0)
         mouse.click()
         self._sleep(multiplier=2)
 
@@ -175,8 +255,8 @@ def _validate_request(request: DrawRequest) -> None:
         raise ValueError("No quantized image is loaded.")
     if any(color.position is None for color in request.palette):
         raise ValueError("Palette is not calibrated yet.")
-    if request.mode not in {"dot", "line"}:
-        raise ValueError("Draw mode must be 'dot' or 'line'.")
+    if request.mode not in {"dot", "line", "hybrid"}:
+        raise ValueError("Draw mode must be 'dot', 'line', or 'hybrid'.")
 
 
 def _drawing_geometry(request: DrawRequest) -> tuple[int, int, float, float]:
@@ -185,6 +265,11 @@ def _drawing_geometry(request: DrawRequest) -> tuple[int, int, float, float]:
     draw_width = abs(request.bottom_right[0] - request.top_left[0])
     draw_height = abs(request.bottom_right[1] - request.top_left[1])
     return width, height, draw_width / max(width, 1), draw_height / max(height, 1)
+
+
+def _grid_to_screen(request: DrawRequest, point: tuple[int, int]) -> tuple[float, float]:
+    _, _, x_step, y_step = _drawing_geometry(request)
+    return request.top_left[0] + x_step * point[0], request.top_left[1] + y_step * point[1]
 
 
 def _windows_scaling_factor() -> float:

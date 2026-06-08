@@ -22,6 +22,7 @@ from app.palette import (
     palette_from_config,
     palette_to_config,
 )
+from app.planner import build_hybrid_plan
 
 
 class GarticDrawBotApp(ctk.CTk):
@@ -104,8 +105,13 @@ class GarticDrawBotApp(ctk.CTk):
         self.delay_label.grid(row=8, column=0, sticky="w", padx=16, pady=(14, 2))
         self.delay_slider.grid(row=9, column=0, sticky="ew", padx=16, pady=4)
 
-        self.draw_mode = ctk.StringVar(value="line")
-        ctk.CTkSegmentedButton(left, values=["line", "dot"], variable=self.draw_mode).grid(
+        self.draw_mode = ctk.StringVar(value="hybrid")
+        ctk.CTkSegmentedButton(
+            left,
+            values=["hybrid", "line", "dot"],
+            variable=self.draw_mode,
+            command=lambda _: self._on_draw_mode_change(),
+        ).grid(
             row=10, column=0, sticky="ew", padx=16, pady=12
         )
 
@@ -117,34 +123,37 @@ class GarticDrawBotApp(ctk.CTk):
         ctk.CTkButton(left, text="Calibrate Palette", command=self.calibrate_palette).grid(
             row=12, column=0, sticky="ew", padx=16, pady=6
         )
-        ctk.CTkButton(left, text="Test Palette", command=self.test_palette).grid(
+        ctk.CTkButton(left, text="Calibrate Tools", command=self.calibrate_tools).grid(
             row=13, column=0, sticky="ew", padx=16, pady=6
         )
-        ctk.CTkButton(left, text="Set Drawing Area", command=self.set_drawing_area).grid(
+        ctk.CTkButton(left, text="Test Palette", command=self.test_palette).grid(
             row=14, column=0, sticky="ew", padx=16, pady=6
+        )
+        ctk.CTkButton(left, text="Set Drawing Area", command=self.set_drawing_area).grid(
+            row=15, column=0, sticky="ew", padx=16, pady=6
         )
 
         ctk.CTkButton(left, text="Start Drawing", fg_color="#2e7d32", command=self.start_drawing).grid(
-            row=15, column=0, sticky="ew", padx=16, pady=(18, 6)
+            row=16, column=0, sticky="ew", padx=16, pady=(18, 6)
         )
         ctk.CTkButton(left, text="Stop", fg_color="#b3261e", command=self.stop_drawing).grid(
-            row=16, column=0, sticky="ew", padx=16, pady=6
+            row=17, column=0, sticky="ew", padx=16, pady=6
         )
 
         self.status_label = ctk.CTkLabel(left, text="Ready", anchor="w", wraplength=290)
-        self.status_label.grid(row=17, column=0, sticky="ew", padx=16, pady=(18, 6))
+        self.status_label.grid(row=18, column=0, sticky="ew", padx=16, pady=(18, 6))
         self.progress = ctk.CTkProgressBar(left)
-        self.progress.grid(row=18, column=0, sticky="ew", padx=16, pady=(0, 4))
+        self.progress.grid(row=19, column=0, sticky="ew", padx=16, pady=(0, 4))
         self.progress.set(0)
         self.eta_label = ctk.CTkLabel(left, text="ETA: --", anchor="w", text_color="#aab2c0")
-        self.eta_label.grid(row=19, column=0, sticky="ew", padx=16, pady=(0, 10))
+        self.eta_label.grid(row=20, column=0, sticky="ew", padx=16, pady=(0, 10))
         ctk.CTkLabel(
             left,
             text="Original by CowCoding0 - Fork improved by DJ_Nic",
             text_color="#8f98a8",
             font=ctk.CTkFont(size=11),
             wraplength=290,
-        ).grid(row=20, column=0, sticky="w", padx=16, pady=(0, 16))
+        ).grid(row=21, column=0, sticky="w", padx=16, pady=(0, 16))
 
         ctk.CTkLabel(right, text="Preview", font=ctk.CTkFont(size=18, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=16, pady=(16, 8)
@@ -196,6 +205,9 @@ class GarticDrawBotApp(ctk.CTk):
     def test_palette(self) -> None:
         threading.Thread(target=self._test_palette_worker, daemon=True).start()
 
+    def calibrate_tools(self) -> None:
+        threading.Thread(target=self._calibrate_tools_worker, daemon=True).start()
+
     def set_drawing_area(self) -> None:
         threading.Thread(target=self._drawing_area_worker, daemon=True).start()
 
@@ -221,6 +233,7 @@ class GarticDrawBotApp(ctk.CTk):
             bottom_right=game_config.drawing_boundary.bottom_right or (0, 0),
             mode=self.draw_mode.get(),
             game_mode=self.config_model.game_mode,
+            tool_positions=self._active_tool_positions(),
         )
         self._save_preferences()
         self.bot.set_delay_ms(self.config_model.draw_delay_ms)
@@ -255,10 +268,7 @@ class GarticDrawBotApp(ctk.CTk):
             size=(360, 360),
         )
         self.preview_label.configure(image=self.preview_photo, text="")
-        self.info_label.configure(
-            text=f"Source: {self.loaded_image.width}x{self.loaded_image.height} | "
-            f"Draw grid: {len(self.quantized_image.pixel_colors)}x{len(self.quantized_image.pixel_colors[0])}"
-        )
+        self.info_label.configure(text=self._preview_info_text())
         self._set_status("Preview ready.")
 
     def _active_palette(self) -> tuple:
@@ -324,6 +334,26 @@ class GarticDrawBotApp(ctk.CTk):
         except Exception as exc:
             self._post_status(f"Palette test failed: {exc}")
 
+    def _calibrate_tools_worker(self) -> None:
+        if self.config_model.game_mode != "gartic":
+            self._post_status("Tool calibration is only needed for Gartic hybrid mode.")
+            return
+        try:
+            self._post_status("Click the Gartic brush tool.")
+            mouse.wait(mouse.LEFT, mouse.DOWN)
+            brush = mouse.get_position()
+            self._post_status("Click the Gartic fill tool.")
+            mouse.wait(mouse.LEFT, mouse.DOWN)
+            fill = mouse.get_position()
+            active_game_config(self.config_model).tool_positions = {
+                "brush": {"x": int(brush[0]), "y": int(brush[1])},
+                "fill": {"x": int(fill[0]), "y": int(fill[1])},
+            }
+            self.store.save(self.config_model)
+            self._post_status("Gartic tools calibrated and saved.")
+        except Exception as exc:
+            self._post_status(f"Tool calibration failed: {exc}")
+
     def _drawing_area_worker(self) -> None:
         try:
             self._post_status("Click top-left drawing corner.")
@@ -362,6 +392,35 @@ class GarticDrawBotApp(ctk.CTk):
 
         self.draw_thread = threading.Thread(target=self._run_draw, args=(request,), daemon=True)
         self.draw_thread.start()
+
+    def _active_tool_positions(self) -> dict[str, tuple[int, int]]:
+        result: dict[str, tuple[int, int]] = {}
+        for name, position in active_game_config(self.config_model).tool_positions.items():
+            try:
+                result[name] = (int(position["x"]), int(position["y"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return result
+
+    def _preview_info_text(self) -> str:
+        if self.loaded_image is None or self.quantized_image is None:
+            return ""
+        grid = self.quantized_image.pixel_colors
+        text = (
+            f"Source: {self.loaded_image.width}x{self.loaded_image.height} | "
+            f"Draw grid: {len(grid)}x{len(grid[0])}"
+        )
+        if self.config_model.game_mode == "gartic" and self.draw_mode.get() == "hybrid":
+            tool_positions = self._active_tool_positions()
+            plan = build_hybrid_plan(grid, fill_enabled={"brush", "fill"}.issubset(tool_positions))
+            text += f" | Planned: {len(plan.strokes)} strokes, {len(plan.fills)} fills"
+        return text
+
+    def _on_draw_mode_change(self) -> None:
+        self.config_model.draw_mode = self.draw_mode.get()
+        self.store.save(self.config_model)
+        if self.loaded_image is not None:
+            self._refresh_preview()
 
     def _on_detail_change(self, value: float | int) -> None:
         self.detail_label.configure(text=f"Detail: {int(float(value))}")

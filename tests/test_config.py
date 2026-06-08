@@ -9,7 +9,7 @@ def test_config_store_returns_defaults_for_missing_file(tmp_path):
     assert config.detail_level == 9
     assert config.draw_delay_ms == 5
     assert config.start_countdown_seconds == 3
-    assert config.draw_mode == "line"
+    assert config.draw_mode == "hybrid"
     assert config.game_mode == "gartic"
     assert active_game_config(config).drawing_boundary.top_left is None
 
@@ -31,6 +31,7 @@ def test_config_store_round_trips_config(tmp_path):
         game_configs={
             "gartic": GameConfig(
                 palette_positions={"Black": {"x": 10, "y": 20}},
+                tool_positions={"brush": {"x": 30, "y": 40}, "fill": {"x": 50, "y": 60}},
                 drawing_boundary=DrawingBoundary((1, 2), (3, 4)),
             ),
             "skribbl": GameConfig(
@@ -50,6 +51,7 @@ def test_config_store_round_trips_config(tmp_path):
 
     assert actual.game_mode == "skribbl"
     assert actual.game_configs["gartic"].palette_positions == {"Black": {"x": 10, "y": 20}}
+    assert actual.game_configs["gartic"].tool_positions == {"brush": {"x": 30, "y": 40}, "fill": {"x": 50, "y": 60}}
     assert actual.game_configs["gartic"].drawing_boundary.top_left == (1, 2)
     assert actual.game_configs["skribbl"].palette_positions == {"White": {"x": 100, "y": 200}}
     assert active_game_config(actual).drawing_boundary.bottom_right == (7, 8)

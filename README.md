@@ -13,6 +13,7 @@ Original code by CowCoding0. Fork and improvements by DJ_Nic.
 - Local image and URL support.
 - Game palette preview before drawing.
 - Dot and line drawing modes.
+- Gartic hybrid mode that reduces mouse spam with planned strokes and optional fill operations.
 - Live delay slider to slow down clicks and drags while drawing.
 - ETA display next to the progress bar while drawing.
 - Optional start countdown so you can release the mouse before drawing begins.
@@ -37,16 +38,21 @@ Run the `.exe` on Windows. The app does not need an installer.
 3. Pick `gartic` or `skribbl`.
 4. Click `Calibrate Palette`.
 5. For Gartic Phone, click black, gray, and white when prompted. For Skribbl.io, click every color from left to right when prompted.
-6. Click `Set Drawing Area`.
-7. Click the top-left and bottom-right corners of the drawing area.
-8. Pick detail level and drawing mode.
-9. Keep `Countdown` enabled if you want a short 3-second safety pause before drawing.
-10. Raise `Delay` if the game misses color changes or line mode drags toward the palette.
-11. Click `Start Drawing`.
-12. Watch the progress bar and ETA while the bot draws.
-13. Press `Esc` or click `Stop` if you need to abort.
+6. For Gartic hybrid mode, click `Calibrate Tools`, then click the brush and fill tools when prompted.
+7. Click `Set Drawing Area`.
+8. Click the top-left and bottom-right corners of the drawing area.
+9. Pick detail level and drawing mode.
+10. Keep `Countdown` enabled if you want a short 3-second safety pause before drawing.
+11. Raise `Delay` if the game misses color changes or line mode drags toward the palette.
+12. Click `Start Drawing`.
+13. Watch the progress bar and ETA while the bot draws.
+14. Press `Esc` or click `Stop` if you need to abort.
 
 Palette and drawing-area settings are saved separately per game. You usually only need to recalibrate when the browser window, zoom, monitor, or game layout changes.
+
+## Gartic Hybrid Mode
+
+`hybrid` is the recommended Gartic mode. It plans fewer drawing operations by grouping connected pixels into longer strokes. Large color regions use a simple outline plus fill when the Gartic fill tool has been calibrated. If the fill tool is missing, hybrid mode falls back to brush-only strokes.
 
 ## Skribbl.io Mode
 
