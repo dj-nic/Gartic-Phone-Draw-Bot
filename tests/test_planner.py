@@ -25,6 +25,7 @@ def test_hybrid_plan_uses_fill_for_large_components_when_enabled():
 
     assert len(plan.fills) == 1
     assert len(plan.strokes) == 0
+    assert len(plan.paths) == 0
     assert plan.operation_count == 5
 
 
@@ -34,8 +35,8 @@ def test_hybrid_plan_falls_back_to_strokes_without_fill():
     plan = build_hybrid_plan(grid, fill_enabled=False, fill_area_threshold=10)
 
     assert len(plan.fills) == 0
-    assert len(plan.strokes) == 8
-    assert plan.operation_count == 8
+    assert len(plan.paths) == 1
+    assert plan.operation_count == 1
 
 
 def test_hybrid_plan_reduces_operations_compared_to_dot_mode():
@@ -44,3 +45,16 @@ def test_hybrid_plan_reduces_operations_compared_to_dot_mode():
     plan = build_hybrid_plan(grid, fill_enabled=True, fill_area_threshold=10)
 
     assert plan.operation_count < 64
+
+
+def test_hybrid_plan_skips_fill_for_unsafe_sparse_shape():
+    grid = [[None for _ in range(8)] for _ in range(8)]
+    for index in range(8):
+        grid[index][0] = BLACK
+        grid[0][index] = BLACK
+
+    plan = build_hybrid_plan(grid, fill_enabled=True, fill_area_threshold=4)
+
+    assert len(plan.fills) == 0
+    assert plan.unsafe_fill_skips == 1
+    assert len(plan.paths) == 1

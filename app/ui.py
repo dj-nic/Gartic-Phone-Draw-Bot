@@ -413,7 +413,9 @@ class GarticDrawBotApp(ctk.CTk):
         if self.config_model.game_mode == "gartic" and self.draw_mode.get() == "hybrid":
             tool_positions = self._active_tool_positions()
             plan = build_hybrid_plan(grid, fill_enabled={"brush", "fill"}.issubset(tool_positions))
-            text += f" | Planned: {len(plan.strokes)} strokes, {len(plan.fills)} fills"
+            text += f" | Planned: {len(plan.paths)} paths, {len(plan.fills)} fills"
+            if plan.unsafe_fill_skips:
+                text += f", {plan.unsafe_fill_skips} unsafe fills skipped"
         return text
 
     def _on_draw_mode_change(self) -> None:

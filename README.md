@@ -52,7 +52,7 @@ Palette and drawing-area settings are saved separately per game. You usually onl
 
 ## Gartic Hybrid Mode
 
-`hybrid` is the recommended Gartic mode. It plans fewer drawing operations by grouping connected pixels into longer strokes. Large color regions use a simple outline plus fill when the Gartic fill tool has been calibrated. If the fill tool is missing, hybrid mode falls back to brush-only strokes.
+`hybrid` is the recommended Gartic mode. It plans fewer drawing operations by grouping connected pixels into longer brush paths. Fill is used only for compact, closed-looking regions when the Gartic fill tool has been calibrated. Unsafe shapes are drawn with brush paths instead, so the fill tool is less likely to leak into surrounding areas. If the fill tool is missing, hybrid mode falls back to brush-only paths.
 
 ## Skribbl.io Mode
 

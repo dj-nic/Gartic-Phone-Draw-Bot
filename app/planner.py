@@ -18,6 +18,12 @@ class StrokeSegment:
 
 
 @dataclass(frozen=True)
+class StrokePath:
+    color: PaletteColor
+    points: tuple[Point, ...]
+
+
+@dataclass(frozen=True)
 class FillRegion:
     color: PaletteColor
     outline: tuple[StrokeSegment, ...]
@@ -27,13 +33,15 @@ class FillRegion:
 @dataclass(frozen=True)
 class DrawingPlan:
     strokes: tuple[StrokeSegment, ...]
+    paths: tuple[StrokePath, ...]
     fills: tuple[FillRegion, ...]
     fill_enabled: bool
+    unsafe_fill_skips: int = 0
 
     @property
     def operation_count(self) -> int:
         fill_ops = sum(len(region.outline) + 1 for region in self.fills)
-        return len(self.strokes) + fill_ops
+        return len(self.strokes) + len(self.paths) + fill_ops
 
 
 @dataclass(frozen=True)
@@ -56,21 +64,31 @@ def build_hybrid_plan(
     pixel_colors: Grid,
     *,
     fill_enabled: bool,
-    fill_area_threshold: int = 36,
+    fill_area_threshold: int = 64,
     min_component_area: int = 2,
 ) -> DrawingPlan:
     strokes: list[StrokeSegment] = []
+    paths: list[StrokePath] = []
     fills: list[FillRegion] = []
+    unsafe_fill_skips = 0
 
     for component in connected_components(pixel_colors):
         if component.area < min_component_area:
             continue
-        if fill_enabled and component.area >= fill_area_threshold:
+        if fill_enabled and _is_safe_fill_component(component, fill_area_threshold):
             fills.append(_component_to_fill_region(component))
         else:
-            strokes.extend(_component_to_horizontal_strokes(component))
+            if fill_enabled and component.area >= fill_area_threshold:
+                unsafe_fill_skips += 1
+            paths.extend(_component_to_serpentine_paths(component))
 
-    return DrawingPlan(strokes=tuple(strokes), fills=tuple(fills), fill_enabled=fill_enabled)
+    return DrawingPlan(
+        strokes=tuple(strokes),
+        paths=tuple(paths),
+        fills=tuple(fills),
+        fill_enabled=fill_enabled,
+        unsafe_fill_skips=unsafe_fill_skips,
+    )
 
 
 def connected_components(pixel_colors: Grid) -> list[Component]:
@@ -142,6 +160,89 @@ def _component_to_horizontal_strokes(component: Component) -> list[StrokeSegment
             start = previous = x
         strokes.append(StrokeSegment(component.color, (start, y), (previous, y)))
     return strokes
+
+
+def _component_to_serpentine_paths(component: Component) -> list[StrokePath]:
+    by_row: dict[int, list[int]] = {}
+    for x, y in component.points:
+        by_row.setdefault(y, []).append(x)
+
+    paths: list[StrokePath] = []
+    current_path: list[Point] = []
+    previous_row: int | None = None
+    previous_end: Point | None = None
+    reverse = False
+
+    for y in sorted(by_row):
+        runs = _row_runs(sorted(by_row[y]))
+        if reverse:
+            runs = [(end, start) for start, end in reversed(runs)]
+
+        for start, end in runs:
+            run_start = (start, y)
+            run_end = (end, y)
+            can_connect = (
+                previous_row is not None
+                and previous_end is not None
+                and y == previous_row + 1
+                and min(start, end) <= previous_end[0] <= max(start, end)
+            )
+            if not current_path or not can_connect:
+                if len(current_path) >= 2:
+                    paths.append(StrokePath(component.color, tuple(current_path)))
+                current_path = [run_start]
+            elif current_path[-1] != run_start:
+                current_path.append(run_start)
+
+            if run_end != current_path[-1]:
+                current_path.append(run_end)
+            previous_row = y
+            previous_end = run_end
+
+        reverse = not reverse
+
+    if len(current_path) >= 2:
+        paths.append(StrokePath(component.color, tuple(current_path)))
+
+    return paths
+
+
+def _row_runs(xs: list[int]) -> list[tuple[int, int]]:
+    if not xs:
+        return []
+    runs: list[tuple[int, int]] = []
+    start = previous = xs[0]
+    for x in xs[1:]:
+        if x == previous + 1:
+            previous = x
+            continue
+        runs.append((start, previous))
+        start = previous = x
+    runs.append((start, previous))
+    return runs
+
+
+def _is_safe_fill_component(component: Component, fill_area_threshold: int) -> bool:
+    if component.area < fill_area_threshold:
+        return False
+    min_x, min_y, max_x, max_y = component.bounds
+    width = max_x - min_x + 1
+    height = max_y - min_y + 1
+    if width < 5 or height < 5:
+        return False
+
+    bbox_area = width * height
+    density = component.area / bbox_area
+    if density < 0.92:
+        return False
+
+    for x in range(min_x, max_x + 1):
+        if (x, min_y) not in component.points or (x, max_y) not in component.points:
+            return False
+    for y in range(min_y, max_y + 1):
+        if (min_x, y) not in component.points or (max_x, y) not in component.points:
+            return False
+    return True
 
 
 def _component_to_fill_region(component: Component) -> FillRegion:

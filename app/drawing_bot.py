@@ -10,7 +10,7 @@ import keyboard
 import mouse
 
 from app.palette import PaletteColor
-from app.planner import DrawingPlan, FillRegion, StrokeSegment, build_hybrid_plan
+from app.planner import FillRegion, StrokePath, StrokeSegment, build_hybrid_plan
 
 
 StatusCallback = Callable[[str], None]
@@ -163,6 +163,13 @@ class DrawingBot:
             done += 1
             self._progress_callback(done, total)
 
+        for path in plan.paths:
+            if self._stop_event.is_set():
+                return
+            self._draw_planned_path(request, path)
+            done += 1
+            self._progress_callback(done, total)
+
         for region in plan.fills:
             if self._stop_event.is_set():
                 return
@@ -211,6 +218,22 @@ class DrawingBot:
         self._sleep()
         mouse.move(end[0], end[1], duration=0)
         self._sleep()
+        mouse.release()
+        self._sleep()
+
+    def _draw_planned_path(self, request: DrawRequest, path: StrokePath) -> None:
+        if len(path.points) < 2:
+            return
+        self._select_color(path.color)
+        first = _grid_to_screen(request, path.points[0])
+        mouse.move(first[0], first[1], duration=0)
+        self._sleep()
+        mouse.hold()
+        self._sleep()
+        for point in path.points[1:]:
+            x, y = _grid_to_screen(request, point)
+            mouse.move(x, y, duration=0)
+            self._sleep()
         mouse.release()
         self._sleep()
         mouse.hold()
