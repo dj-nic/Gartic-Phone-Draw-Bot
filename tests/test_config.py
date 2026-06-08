@@ -7,7 +7,7 @@ def test_config_store_returns_defaults_for_missing_file(tmp_path):
     config = ConfigStore(tmp_path / "missing.json").load()
 
     assert config.detail_level == 9
-    assert config.draw_delay_ms == 25
+    assert config.draw_delay_ms == 5
     assert config.start_countdown_seconds == 3
     assert config.draw_mode == "line"
     assert config.game_mode == "gartic"

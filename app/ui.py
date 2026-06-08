@@ -99,8 +99,8 @@ class GarticDrawBotApp(ctk.CTk):
         self.detail_label.grid(row=6, column=0, sticky="w", padx=16, pady=(18, 2))
         self.detail_slider.grid(row=7, column=0, sticky="ew", padx=16, pady=4)
 
-        self.delay_slider = ctk.CTkSlider(left, from_=0, to=250, number_of_steps=50, command=self._on_delay_change)
-        self.delay_label = ctk.CTkLabel(left, text="Delay: 25 ms")
+        self.delay_slider = ctk.CTkSlider(left, from_=0, to=100, command=self._on_delay_change)
+        self.delay_label = ctk.CTkLabel(left, text="Delay: 5 ms")
         self.delay_label.grid(row=8, column=0, sticky="w", padx=16, pady=(14, 2))
         self.delay_slider.grid(row=9, column=0, sticky="ew", padx=16, pady=4)
 

@@ -33,7 +33,7 @@ class AppConfig:
         default_factory=lambda: {"gartic": GameConfig(), "skribbl": GameConfig()}
     )
     detail_level: int = 9
-    draw_delay_ms: int = 25
+    draw_delay_ms: int = 5
     start_countdown_seconds: int = 3
     draw_mode: str = "line"
     image_source_mode: str = "file"
@@ -66,7 +66,7 @@ class ConfigStore:
             game_mode=payload.get("game_mode") if payload.get("game_mode") in {"gartic", "skribbl"} else "gartic",
             game_configs=game_configs,
             detail_level=_clamp_int(payload.get("detail_level"), 1, 10, 9),
-            draw_delay_ms=_clamp_int(payload.get("draw_delay_ms"), 0, 250, 25),
+            draw_delay_ms=_clamp_int(payload.get("draw_delay_ms"), 0, 100, 5),
             start_countdown_seconds=_clamp_int(payload.get("start_countdown_seconds"), 0, 10, 3),
             draw_mode=payload.get("draw_mode") if payload.get("draw_mode") in {"dot", "line"} else "line",
             image_source_mode=(

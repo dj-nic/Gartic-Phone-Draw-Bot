@@ -37,5 +37,5 @@ def test_build_palette_from_clicks_maps_skribbl_positions_in_order():
 
     assert palette[0].name == "White"
     assert palette[0].position == ScreenPosition(0, 10)
-    assert palette[-1].name == "Brown"
+    assert palette[-1].name == "Dark Brown"
     assert palette[-1].position == ScreenPosition(len(SKRIBBL_PALETTE) - 1, len(SKRIBBL_PALETTE) + 9)

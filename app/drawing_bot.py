@@ -34,14 +34,14 @@ class DrawingBot:
     ) -> None:
         self._stop_event = threading.Event()
         self._delay_lock = threading.Lock()
-        self._delay_ms = 25
+        self._delay_ms = 5
         self._status_callback = status_callback or (lambda message: None)
         self._progress_callback = progress_callback or (lambda done, total: None)
         self._scaling_factor = _windows_scaling_factor()
 
     def set_delay_ms(self, delay_ms: int) -> None:
         with self._delay_lock:
-            self._delay_ms = max(0, min(250, int(delay_ms)))
+            self._delay_ms = max(0, min(100, int(delay_ms)))
 
     @property
     def is_stopped(self) -> bool:
