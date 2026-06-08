@@ -140,8 +140,7 @@ class DrawingBot:
         self._select_color(color)
         start = (request.top_left[0] + x_step * x, request.top_left[1] + y_step * start_y)
         end = (request.top_left[0] + x_step * x, request.top_left[1] + y_step * end_y)
-        mouse.move(start[0], start[1], duration=0)
-        self._sleep()
+        self._draw_drag(start, end)
 
     def _draw_hybrid(self, request: DrawRequest) -> None:
         tool_positions = request.tool_positions or {}
@@ -212,20 +211,19 @@ class DrawingBot:
         self._select_color(stroke.color)
         start = _grid_to_screen(request, stroke.start)
         end = _grid_to_screen(request, stroke.end)
-        mouse.move(start[0], start[1], duration=0)
-        self._sleep()
-        mouse.hold()
-        self._sleep()
-        mouse.move(end[0], end[1], duration=0)
-        self._sleep()
-        mouse.release()
-        self._sleep()
+        self._draw_drag(start, end)
 
     def _draw_planned_path(self, request: DrawRequest, path: StrokePath) -> None:
-        if len(path.points) < 2:
+        if not path.points:
             return
         self._select_color(path.color)
         first = _grid_to_screen(request, path.points[0])
+        if len(path.points) == 1:
+            mouse.move(first[0], first[1], duration=0)
+            self._sleep()
+            mouse.click()
+            self._sleep()
+            return
         mouse.move(first[0], first[1], duration=0)
         self._sleep()
         mouse.hold()
@@ -236,12 +234,26 @@ class DrawingBot:
             self._sleep()
         mouse.release()
         self._sleep()
+
+    def _draw_drag(self, start: tuple[float, float], end: tuple[float, float]) -> None:
+        mouse.move(start[0], start[1], duration=0)
+        self._sleep()
+        if start == end:
+            mouse.click()
+            self._sleep()
+            return
         mouse.hold()
         self._sleep()
-        mouse.move(end[0], end[1], duration=0)
+        mouse.move(end[0], end[1], duration=self._drag_move_duration())
         self._sleep()
         mouse.release()
         self._sleep()
+
+    def _drag_move_duration(self) -> float:
+        delay = self._current_delay_seconds()
+        if delay <= 0:
+            return 0.01
+        return max(0.01, min(0.08, delay))
 
     def _select_color(self, color: PaletteColor) -> None:
         if color.position is None:
