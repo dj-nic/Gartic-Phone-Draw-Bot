@@ -57,5 +57,22 @@ def test_hybrid_plan_skips_fill_for_unsafe_sparse_shape():
 
     assert len(plan.fills) == 0
     assert plan.unsafe_fill_skips == 1
-    assert len(plan.paths) == 2
+    assert len(plan.paths) == 1
     assert plan.operation_count < 15
+
+
+def test_hybrid_plan_draws_outline_shape_as_natural_path():
+    grid = [[None for _ in range(10)] for _ in range(10)]
+    for index in range(2, 8):
+        grid[index][2] = BLACK
+        grid[index][7] = BLACK
+        grid[2][index] = BLACK
+        grid[7][index] = BLACK
+
+    plan = build_hybrid_plan(grid, fill_enabled=False, fill_area_threshold=10)
+
+    assert len(plan.fills) == 0
+    assert len(plan.paths) == 1
+    assert len(plan.paths[0].points) < 20
+    assert plan.paths[0].points[0] == plan.paths[0].points[-1]
+    assert plan.operation_count == 1

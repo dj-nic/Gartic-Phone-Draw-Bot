@@ -80,7 +80,10 @@ def build_hybrid_plan(
         else:
             if fill_enabled and component.area >= fill_area_threshold:
                 unsafe_fill_skips += 1
-            paths.extend(_component_to_serpentine_paths(component))
+            if _should_draw_as_natural_path(component):
+                paths.extend(_component_to_natural_paths(component))
+            else:
+                paths.extend(_component_to_serpentine_paths(component))
 
     return DrawingPlan(
         strokes=tuple(strokes),
@@ -205,6 +208,120 @@ def _component_to_serpentine_paths(component: Component) -> list[StrokePath]:
         paths.append(StrokePath(component.color, tuple(current_path)))
 
     return paths
+
+
+def _should_draw_as_natural_path(component: Component) -> bool:
+    min_x, min_y, max_x, max_y = component.bounds
+    width = max_x - min_x + 1
+    height = max_y - min_y + 1
+    if width < 3 or height < 3:
+        return False
+
+    density = component.area / (width * height)
+    perimeter_hint = max(1, 2 * (width + height))
+    return density <= 0.65 or component.area <= perimeter_hint * 2
+
+
+def _component_to_natural_paths(component: Component) -> list[StrokePath]:
+    unvisited = set(component.points)
+    paths: list[StrokePath] = []
+
+    while unvisited:
+        start = _natural_path_start(unvisited)
+        path = [start]
+        unvisited.remove(start)
+        previous_direction: tuple[int, int] | None = None
+
+        while True:
+            next_point = _next_natural_neighbor(path[-1], unvisited, previous_direction)
+            if next_point is None:
+                break
+            previous_direction = (next_point[0] - path[-1][0], next_point[1] - path[-1][1])
+            path.append(next_point)
+            unvisited.remove(next_point)
+
+        if len(path) > 2 and path[0] in _neighbors8(path[-1]):
+            path.append(path[0])
+
+        if len(path) == 1:
+            paths.append(StrokePath(component.color, (path[0],)))
+        else:
+            paths.append(StrokePath(component.color, _simplify_path(path)))
+
+    return paths
+
+
+def _natural_path_start(points: set[Point]) -> Point:
+    endpoints = [point for point in points if _neighbor_count(point, points) <= 1]
+    if endpoints:
+        return min(endpoints, key=lambda point: (point[1], point[0]))
+    return min(points, key=lambda point: (point[1], point[0]))
+
+
+def _neighbor_count(point: Point, points: set[Point]) -> int:
+    return sum(1 for neighbor in _neighbors8(point) if neighbor in points)
+
+
+def _next_natural_neighbor(
+    point: Point,
+    candidates: set[Point],
+    previous_direction: tuple[int, int] | None,
+) -> Point | None:
+    neighbors = [neighbor for neighbor in _neighbors8(point) if neighbor in candidates]
+    if not neighbors:
+        return None
+    if previous_direction is None:
+        return min(neighbors, key=lambda neighbor: (neighbor[1], neighbor[0]))
+
+    def score(neighbor: Point) -> tuple[int, int, int, int]:
+        direction = (neighbor[0] - point[0], neighbor[1] - point[1])
+        turn_cost = abs(direction[0] - previous_direction[0]) + abs(direction[1] - previous_direction[1])
+        diagonal_cost = 1 if direction[0] and direction[1] else 0
+        onward = -_neighbor_count(neighbor, candidates)
+        return turn_cost, diagonal_cost, onward, neighbor[1] * 10000 + neighbor[0]
+
+    return min(neighbors, key=score)
+
+
+def _neighbors8(point: Point) -> tuple[Point, ...]:
+    x, y = point
+    return (
+        (x - 1, y - 1),
+        (x, y - 1),
+        (x + 1, y - 1),
+        (x - 1, y),
+        (x + 1, y),
+        (x - 1, y + 1),
+        (x, y + 1),
+        (x + 1, y + 1),
+    )
+
+
+def _simplify_path(points: list[Point]) -> tuple[Point, ...]:
+    if len(points) <= 2:
+        return tuple(points)
+
+    simplified = [points[0]]
+    previous_direction = _point_direction(points[0], points[1])
+    for index in range(1, len(points) - 1):
+        direction = _point_direction(points[index], points[index + 1])
+        if direction != previous_direction:
+            simplified.append(points[index])
+            previous_direction = direction
+    simplified.append(points[-1])
+    return tuple(simplified)
+
+
+def _point_direction(start: Point, end: Point) -> tuple[int, int]:
+    return _sign(end[0] - start[0]), _sign(end[1] - start[1])
+
+
+def _sign(value: int) -> int:
+    if value < 0:
+        return -1
+    if value > 0:
+        return 1
+    return 0
 
 
 def _row_runs(xs: list[int]) -> list[tuple[int, int]]:
