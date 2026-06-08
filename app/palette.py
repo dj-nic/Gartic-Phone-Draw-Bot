@@ -41,6 +41,34 @@ GARTIC_PALETTE: tuple[PaletteColor, ...] = (
     PaletteColor("Light Pink", (254, 175, 168)),
 )
 
+SKRIBBL_PALETTE: tuple[PaletteColor, ...] = (
+    PaletteColor("White", (255, 255, 255)),
+    PaletteColor("Light Gray", (193, 193, 193)),
+    PaletteColor("Gray", (76, 76, 76)),
+    PaletteColor("Black", (0, 0, 0)),
+    PaletteColor("Red", (239, 19, 11)),
+    PaletteColor("Dark Red", (116, 11, 7)),
+    PaletteColor("Orange", (255, 113, 0)),
+    PaletteColor("Yellow", (255, 228, 0)),
+    PaletteColor("Green", (0, 204, 0)),
+    PaletteColor("Dark Green", (0, 85, 16)),
+    PaletteColor("Cyan", (0, 255, 145)),
+    PaletteColor("Teal", (0, 178, 93)),
+    PaletteColor("Light Blue", (0, 178, 255)),
+    PaletteColor("Blue", (0, 86, 158)),
+    PaletteColor("Purple", (35, 31, 211)),
+    PaletteColor("Dark Purple", (14, 8, 101)),
+    PaletteColor("Magenta", (163, 0, 186)),
+    PaletteColor("Pink", (223, 105, 167)),
+    PaletteColor("Tan", (255, 172, 142)),
+    PaletteColor("Brown", (160, 82, 45)),
+)
+
+GAME_PALETTES: dict[str, tuple[PaletteColor, ...]] = {
+    "gartic": GARTIC_PALETTE,
+    "skribbl": SKRIBBL_PALETTE,
+}
+
 
 def closest_color(rgb: tuple[int, int, int], palette: tuple[PaletteColor, ...] = GARTIC_PALETTE) -> PaletteColor:
     return min(palette, key=lambda color: color_distance(rgb, color.rgb))
@@ -75,6 +103,15 @@ def build_palette_positions(
             row_offset += y_offset_step
 
     return tuple(positioned)
+
+
+def build_palette_from_clicks(
+    positions: list[ScreenPosition],
+    palette: tuple[PaletteColor, ...],
+) -> tuple[PaletteColor, ...]:
+    if len(positions) != len(palette):
+        raise ValueError(f"Expected {len(palette)} color positions, got {len(positions)}.")
+    return tuple(color.with_position(position.x, position.y) for color, position in zip(palette, positions))
 
 
 def palette_from_config(

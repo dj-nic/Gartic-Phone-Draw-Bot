@@ -21,9 +21,17 @@ class DrawingBoundary:
 
 
 @dataclass
-class AppConfig:
+class GameConfig:
     palette_positions: dict[str, dict[str, int]] = field(default_factory=dict)
     drawing_boundary: DrawingBoundary = field(default_factory=DrawingBoundary)
+
+
+@dataclass
+class AppConfig:
+    game_mode: str = "gartic"
+    game_configs: dict[str, GameConfig] = field(
+        default_factory=lambda: {"gartic": GameConfig(), "skribbl": GameConfig()}
+    )
     detail_level: int = 9
     draw_delay_ms: int = 25
     start_countdown_seconds: int = 3
@@ -45,12 +53,18 @@ class ConfigStore:
             return AppConfig()
 
         boundary = payload.get("drawing_boundary") or {}
-        return AppConfig(
+        legacy_game_config = GameConfig(
             palette_positions=dict(payload.get("palette_positions") or {}),
             drawing_boundary=DrawingBoundary(
                 top_left=_tuple_or_none(boundary.get("top_left")),
                 bottom_right=_tuple_or_none(boundary.get("bottom_right")),
             ),
+        )
+        game_configs = _load_game_configs(payload.get("game_configs"), legacy_game_config)
+
+        return AppConfig(
+            game_mode=payload.get("game_mode") if payload.get("game_mode") in {"gartic", "skribbl"} else "gartic",
+            game_configs=game_configs,
             detail_level=_clamp_int(payload.get("detail_level"), 1, 10, 9),
             draw_delay_ms=_clamp_int(payload.get("draw_delay_ms"), 0, 250, 25),
             start_countdown_seconds=_clamp_int(payload.get("start_countdown_seconds"), 0, 10, 3),
@@ -65,6 +79,14 @@ class ConfigStore:
     def save(self, config: AppConfig) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(asdict(config), indent=2), encoding="utf-8")
+
+
+def active_game_config(config: AppConfig) -> GameConfig:
+    return config.game_configs.setdefault(config.game_mode, GameConfig())
+
+
+def set_active_game_config(config: AppConfig, game_config: GameConfig) -> None:
+    config.game_configs[config.game_mode] = game_config
 
 
 def default_config_path() -> Path:
@@ -89,3 +111,23 @@ def _clamp_int(value: Any, minimum: int, maximum: int, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(minimum, min(maximum, number))
+
+
+def _load_game_configs(value: Any, legacy_gartic: GameConfig) -> dict[str, GameConfig]:
+    game_configs = {"gartic": legacy_gartic, "skribbl": GameConfig()}
+    if not isinstance(value, dict):
+        return game_configs
+
+    for game_mode in ("gartic", "skribbl"):
+        payload = value.get(game_mode)
+        if not isinstance(payload, dict):
+            continue
+        boundary = payload.get("drawing_boundary") or {}
+        game_configs[game_mode] = GameConfig(
+            palette_positions=dict(payload.get("palette_positions") or {}),
+            drawing_boundary=DrawingBoundary(
+                top_left=_tuple_or_none(boundary.get("top_left")),
+                bottom_right=_tuple_or_none(boundary.get("bottom_right")),
+            ),
+        )
+    return game_configs

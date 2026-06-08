@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+import keyboard
 import mouse
 
 from app.palette import PaletteColor
@@ -22,6 +23,7 @@ class DrawRequest:
     top_left: tuple[int, int]
     bottom_right: tuple[int, int]
     mode: str
+    game_mode: str = "gartic"
 
 
 class DrawingBot:
@@ -55,6 +57,9 @@ class DrawingBot:
     def draw(self, request: DrawRequest) -> None:
         self.reset()
         _validate_request(request)
+        if request.game_mode == "skribbl":
+            keyboard.press_and_release("b")
+            self._sleep(multiplier=2)
         if request.mode == "dot":
             self._draw_dots(request)
         else:

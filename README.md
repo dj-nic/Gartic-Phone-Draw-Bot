@@ -9,8 +9,9 @@ Original code by CowCoding0. Fork and improvements by DJ_Nic.
 ## Features
 
 - One integrated desktop app for image loading, palette calibration, drawing-area setup, and drawing.
+- Gartic Phone and Skribbl.io modes with separate saved calibration data.
 - Local image and URL support.
-- Gartic palette preview before drawing.
+- Game palette preview before drawing.
 - Dot and line drawing modes.
 - Live delay slider to slow down clicks and drags while drawing.
 - ETA display next to the progress bar while drawing.
@@ -33,18 +34,23 @@ Run the `.exe` on Windows. The app does not need an installer.
 
 1. Start `GarticPhoneDrawBot.exe`.
 2. Choose `file` or `url`, then load an image.
-3. Click `Calibrate Palette`.
-4. In Gartic Phone, click the black, gray, and white color cells when prompted.
-5. Click `Set Drawing Area`.
-6. Click the top-left and bottom-right corners of the drawing area.
-7. Pick detail level and drawing mode.
-8. Keep `Countdown` enabled if you want a short 3-second safety pause before drawing.
-9. Raise `Delay` if Gartic misses color changes or line mode drags toward the palette.
-10. Click `Start Drawing`.
-11. Watch the progress bar and ETA while the bot draws.
-12. Press `Esc` or click `Stop` if you need to abort.
+3. Pick `gartic` or `skribbl`.
+4. Click `Calibrate Palette`.
+5. For Gartic Phone, click black, gray, and white when prompted. For Skribbl.io, click every color from left to right when prompted.
+6. Click `Set Drawing Area`.
+7. Click the top-left and bottom-right corners of the drawing area.
+8. Pick detail level and drawing mode.
+9. Keep `Countdown` enabled if you want a short 3-second safety pause before drawing.
+10. Raise `Delay` if the game misses color changes or line mode drags toward the palette.
+11. Click `Start Drawing`.
+12. Watch the progress bar and ETA while the bot draws.
+13. Press `Esc` or click `Stop` if you need to abort.
 
-The palette and drawing-area settings are saved automatically, so you usually only need to recalibrate when the browser window, zoom, monitor, or Gartic layout changes.
+Palette and drawing-area settings are saved separately per game. You usually only need to recalibrate when the browser window, zoom, monitor, or game layout changes.
+
+## Skribbl.io Mode
+
+Skribbl.io uses its own palette and shortcuts. Calibrate the palette by clicking the visible color buttons from left to right. Before drawing starts, the app sends `B` once to select the brush tool.
 
 ## Development
 
@@ -83,7 +89,7 @@ app/
   config.py           AppData JSON config loading/saving
   drawing_bot.py      Mouse automation core
   image_processor.py  Image loading, resizing, and palette preview
-  palette.py          Gartic palette and calibration helpers
+  palette.py          Game palettes and calibration helpers
   ui.py               CustomTkinter desktop app
 tests/                Unit tests for non-mouse logic
 ```

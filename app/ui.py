@@ -11,10 +11,17 @@ import keyboard
 import mouse
 from PIL import Image
 
-from app.config import AppConfig, ConfigStore
+from app.config import AppConfig, ConfigStore, GameConfig, active_game_config
 from app.drawing_bot import DrawRequest, DrawingBot
 from app.image_processor import ImageProcessor, QuantizedImage
-from app.palette import ScreenPosition, build_palette_positions, palette_from_config, palette_to_config
+from app.palette import (
+    GAME_PALETTES,
+    ScreenPosition,
+    build_palette_from_clicks,
+    build_palette_positions,
+    palette_from_config,
+    palette_to_config,
+)
 
 
 class GarticDrawBotApp(ctk.CTk):
@@ -24,12 +31,12 @@ class GarticDrawBotApp(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.title("Gartic Phone Draw Bot")
-        self.geometry("1040x720")
+        self.geometry("1180x800")
         self.minsize(940, 640)
 
         self.store = ConfigStore()
         self.config_model = self.store.load()
-        self.palette = palette_from_config(self.config_model.palette_positions)
+        self.palette = self._active_palette()
         self.processor = ImageProcessor(self.palette)
         self.bot = DrawingBot(self._post_status, self._post_progress)
         self.bot.set_delay_ms(self.config_model.draw_delay_ms)
@@ -65,71 +72,79 @@ class GarticDrawBotApp(ctk.CTk):
             row=0, column=0, sticky="w", padx=16, pady=(16, 8)
         )
 
+        self.game_mode = ctk.StringVar(value="gartic")
+        ctk.CTkSegmentedButton(
+            left,
+            values=["gartic", "skribbl"],
+            variable=self.game_mode,
+            command=self._on_game_mode_change,
+        ).grid(row=1, column=0, sticky="ew", padx=16, pady=8)
+
         self.source_mode = ctk.StringVar(value="file")
         ctk.CTkSegmentedButton(
             left,
             values=["file", "url"],
             variable=self.source_mode,
             command=lambda _: self._sync_source_controls(),
-        ).grid(row=1, column=0, sticky="ew", padx=16, pady=8)
+        ).grid(row=2, column=0, sticky="ew", padx=16, pady=8)
 
         self.file_button = ctk.CTkButton(left, text="Choose Image", command=self.choose_file)
-        self.file_button.grid(row=2, column=0, sticky="ew", padx=16, pady=6)
+        self.file_button.grid(row=3, column=0, sticky="ew", padx=16, pady=6)
         self.url_entry = ctk.CTkEntry(left, placeholder_text="https://example.com/image.png")
-        self.url_entry.grid(row=3, column=0, sticky="ew", padx=16, pady=6)
-        ctk.CTkButton(left, text="Load Image", command=self.load_image).grid(row=4, column=0, sticky="ew", padx=16, pady=6)
+        self.url_entry.grid(row=4, column=0, sticky="ew", padx=16, pady=6)
+        ctk.CTkButton(left, text="Load Image", command=self.load_image).grid(row=5, column=0, sticky="ew", padx=16, pady=6)
 
         self.detail_slider = ctk.CTkSlider(left, from_=1, to=10, number_of_steps=9, command=self._on_detail_change)
         self.detail_label = ctk.CTkLabel(left, text="Detail: 9")
-        self.detail_label.grid(row=5, column=0, sticky="w", padx=16, pady=(18, 2))
-        self.detail_slider.grid(row=6, column=0, sticky="ew", padx=16, pady=4)
+        self.detail_label.grid(row=6, column=0, sticky="w", padx=16, pady=(18, 2))
+        self.detail_slider.grid(row=7, column=0, sticky="ew", padx=16, pady=4)
 
         self.delay_slider = ctk.CTkSlider(left, from_=0, to=250, number_of_steps=50, command=self._on_delay_change)
         self.delay_label = ctk.CTkLabel(left, text="Delay: 25 ms")
-        self.delay_label.grid(row=7, column=0, sticky="w", padx=16, pady=(14, 2))
-        self.delay_slider.grid(row=8, column=0, sticky="ew", padx=16, pady=4)
+        self.delay_label.grid(row=8, column=0, sticky="w", padx=16, pady=(14, 2))
+        self.delay_slider.grid(row=9, column=0, sticky="ew", padx=16, pady=4)
 
         self.draw_mode = ctk.StringVar(value="line")
         ctk.CTkSegmentedButton(left, values=["line", "dot"], variable=self.draw_mode).grid(
-            row=9, column=0, sticky="ew", padx=16, pady=12
+            row=10, column=0, sticky="ew", padx=16, pady=12
         )
 
         self.countdown_enabled = ctk.BooleanVar(value=True)
         ctk.CTkSwitch(left, text="Countdown", variable=self.countdown_enabled, command=self._on_countdown_change).grid(
-            row=10, column=0, sticky="w", padx=16, pady=(0, 8)
+            row=11, column=0, sticky="w", padx=16, pady=(0, 8)
         )
 
         ctk.CTkButton(left, text="Calibrate Palette", command=self.calibrate_palette).grid(
-            row=11, column=0, sticky="ew", padx=16, pady=6
-        )
-        ctk.CTkButton(left, text="Test Palette", command=self.test_palette).grid(
             row=12, column=0, sticky="ew", padx=16, pady=6
         )
-        ctk.CTkButton(left, text="Set Drawing Area", command=self.set_drawing_area).grid(
+        ctk.CTkButton(left, text="Test Palette", command=self.test_palette).grid(
             row=13, column=0, sticky="ew", padx=16, pady=6
+        )
+        ctk.CTkButton(left, text="Set Drawing Area", command=self.set_drawing_area).grid(
+            row=14, column=0, sticky="ew", padx=16, pady=6
         )
 
         ctk.CTkButton(left, text="Start Drawing", fg_color="#2e7d32", command=self.start_drawing).grid(
-            row=14, column=0, sticky="ew", padx=16, pady=(18, 6)
+            row=15, column=0, sticky="ew", padx=16, pady=(18, 6)
         )
         ctk.CTkButton(left, text="Stop", fg_color="#b3261e", command=self.stop_drawing).grid(
-            row=15, column=0, sticky="ew", padx=16, pady=6
+            row=16, column=0, sticky="ew", padx=16, pady=6
         )
 
         self.status_label = ctk.CTkLabel(left, text="Ready", anchor="w", wraplength=290)
-        self.status_label.grid(row=16, column=0, sticky="ew", padx=16, pady=(18, 6))
+        self.status_label.grid(row=17, column=0, sticky="ew", padx=16, pady=(18, 6))
         self.progress = ctk.CTkProgressBar(left)
-        self.progress.grid(row=17, column=0, sticky="ew", padx=16, pady=(0, 4))
+        self.progress.grid(row=18, column=0, sticky="ew", padx=16, pady=(0, 4))
         self.progress.set(0)
         self.eta_label = ctk.CTkLabel(left, text="ETA: --", anchor="w", text_color="#aab2c0")
-        self.eta_label.grid(row=18, column=0, sticky="ew", padx=16, pady=(0, 10))
+        self.eta_label.grid(row=19, column=0, sticky="ew", padx=16, pady=(0, 10))
         ctk.CTkLabel(
             left,
             text="Original by CowCoding0 - Fork improved by DJ_Nic",
             text_color="#8f98a8",
             font=ctk.CTkFont(size=11),
             wraplength=290,
-        ).grid(row=19, column=0, sticky="w", padx=16, pady=(0, 16))
+        ).grid(row=20, column=0, sticky="w", padx=16, pady=(0, 16))
 
         ctk.CTkLabel(right, text="Preview", font=ctk.CTkFont(size=18, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=16, pady=(16, 8)
@@ -142,6 +157,7 @@ class GarticDrawBotApp(ctk.CTk):
         self._sync_source_controls()
 
     def _load_config_to_ui(self) -> None:
+        self.game_mode.set(self.config_model.game_mode)
         self.source_mode.set(self.config_model.image_source_mode)
         self.draw_mode.set(self.config_model.draw_mode)
         self.detail_slider.set(self.config_model.detail_level)
@@ -193,16 +209,18 @@ class GarticDrawBotApp(ctk.CTk):
         if self.quantized_image is None:
             self._set_status("Load an image first.")
             return
-        if not self.config_model.drawing_boundary.is_ready:
+        game_config = active_game_config(self.config_model)
+        if not game_config.drawing_boundary.is_ready:
             self._set_status("Set the drawing area first.")
             return
 
         request = DrawRequest(
             pixel_colors=self.quantized_image.pixel_colors,
             palette=self.palette,
-            top_left=self.config_model.drawing_boundary.top_left or (0, 0),
-            bottom_right=self.config_model.drawing_boundary.bottom_right or (0, 0),
+            top_left=game_config.drawing_boundary.top_left or (0, 0),
+            bottom_right=game_config.drawing_boundary.bottom_right or (0, 0),
             mode=self.draw_mode.get(),
+            game_mode=self.config_model.game_mode,
         )
         self._save_preferences()
         self.bot.set_delay_ms(self.config_model.draw_delay_ms)
@@ -243,26 +261,47 @@ class GarticDrawBotApp(ctk.CTk):
         )
         self._set_status("Preview ready.")
 
+    def _active_palette(self) -> tuple:
+        base_palette = GAME_PALETTES[self.config_model.game_mode]
+        return palette_from_config(active_game_config(self.config_model).palette_positions, base_palette)
+
+    def _active_game_label(self) -> str:
+        return "Skribbl.io" if self.config_model.game_mode == "skribbl" else "Gartic Phone"
+
+    def _calibrate_gartic_palette(self) -> tuple:
+        self._post_status("Click black color.")
+        mouse.wait(mouse.LEFT, mouse.DOWN)
+        black = mouse.get_position()
+        self._post_status("Click gray color.")
+        mouse.wait(mouse.LEFT, mouse.DOWN)
+        gray = mouse.get_position()
+        self._post_status("Click white color.")
+        mouse.wait(mouse.LEFT, mouse.DOWN)
+        white = mouse.get_position()
+        return build_palette_positions(
+            ScreenPosition(*black),
+            ScreenPosition(*gray),
+            ScreenPosition(*white),
+        )
+
+    def _calibrate_skribbl_palette(self) -> tuple:
+        positions: list[ScreenPosition] = []
+        base_palette = GAME_PALETTES["skribbl"]
+        for index, color in enumerate(base_palette, start=1):
+            self._post_status(f"Click Skribbl color {index}/{len(base_palette)}: {color.name}.")
+            mouse.wait(mouse.LEFT, mouse.DOWN)
+            positions.append(ScreenPosition(*mouse.get_position()))
+        return build_palette_from_clicks(positions, base_palette)
+
     def _calibrate_palette_worker(self) -> None:
         try:
-            self._post_status("Click black color.")
-            mouse.wait(mouse.LEFT, mouse.DOWN)
-            black = mouse.get_position()
-            self._post_status("Click gray color.")
-            mouse.wait(mouse.LEFT, mouse.DOWN)
-            gray = mouse.get_position()
-            self._post_status("Click white color.")
-            mouse.wait(mouse.LEFT, mouse.DOWN)
-            white = mouse.get_position()
-
-            self.palette = build_palette_positions(
-                ScreenPosition(*black),
-                ScreenPosition(*gray),
-                ScreenPosition(*white),
-            )
-            self.config_model.palette_positions = palette_to_config(self.palette)
+            if self.config_model.game_mode == "skribbl":
+                self.palette = self._calibrate_skribbl_palette()
+            else:
+                self.palette = self._calibrate_gartic_palette()
+            active_game_config(self.config_model).palette_positions = palette_to_config(self.palette)
             self.store.save(self.config_model)
-            self._post_status("Palette calibrated and saved.")
+            self._post_status(f"{self._active_game_label()} palette calibrated and saved.")
             if self.loaded_image is not None:
                 self.messages.put(("refresh_preview", None))
         except Exception as exc:
@@ -293,10 +332,11 @@ class GarticDrawBotApp(ctk.CTk):
             self._post_status("Click bottom-right drawing corner.")
             mouse.wait(mouse.LEFT, mouse.DOWN)
             bottom_right = mouse.get_position()
-            self.config_model.drawing_boundary.top_left = (int(top_left[0]), int(top_left[1]))
-            self.config_model.drawing_boundary.bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
+            game_config = active_game_config(self.config_model)
+            game_config.drawing_boundary.top_left = (int(top_left[0]), int(top_left[1]))
+            game_config.drawing_boundary.bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
             self.store.save(self.config_model)
-            self._post_status("Drawing area saved.")
+            self._post_status(f"{self._active_game_label()} drawing area saved.")
         except Exception as exc:
             self._post_status(f"Drawing area failed: {exc}")
 
@@ -339,6 +379,15 @@ class GarticDrawBotApp(ctk.CTk):
         self.config_model.start_countdown_seconds = 3 if self.countdown_enabled.get() else 0
         self.store.save(self.config_model)
 
+    def _on_game_mode_change(self, value: str) -> None:
+        self.config_model.game_mode = value
+        self.palette = self._active_palette()
+        self.processor = ImageProcessor(self.palette)
+        self.store.save(self.config_model)
+        if self.loaded_image is not None:
+            self._refresh_preview()
+        self._set_status(f"{self._active_game_label()} mode selected.")
+
     def _sync_source_controls(self) -> None:
         if self.source_mode.get() == "url":
             self.url_entry.configure(state="normal")
@@ -348,6 +397,7 @@ class GarticDrawBotApp(ctk.CTk):
             self.file_button.configure(state="normal")
 
     def _save_preferences(self) -> None:
+        self.config_model.game_mode = self.game_mode.get()
         self.config_model.detail_level = int(self.detail_slider.get())
         self.config_model.draw_delay_ms = int(self.delay_slider.get())
         self.config_model.start_countdown_seconds = 3 if self.countdown_enabled.get() else 0
