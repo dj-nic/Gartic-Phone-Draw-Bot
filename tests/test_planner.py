@@ -15,7 +15,7 @@ def test_connected_components_groups_same_neighbor_colors():
 
     components = connected_components(grid)
 
-    assert sorted(component.area for component in components) == [2, 3]
+    assert sorted(component.area for component in components) == [1, 2, 3]
 
 
 def test_hybrid_plan_uses_fill_for_large_components_when_enabled():
