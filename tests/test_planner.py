@@ -57,4 +57,5 @@ def test_hybrid_plan_skips_fill_for_unsafe_sparse_shape():
 
     assert len(plan.fills) == 0
     assert plan.unsafe_fill_skips == 1
-    assert len(plan.paths) == 1
+    assert len(plan.paths) == 2
+    assert plan.operation_count < 15
